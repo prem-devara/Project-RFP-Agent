@@ -63,6 +63,12 @@ How to work:
    appear without signal words (lists, tables, headings).
 4. Label requirements, submission instructions, evaluation criteria and Info items,
    one obligation per row, as the rulebook says (including the Submission exception).
+5. Before giving your final answer, review your rows against the list-intro rule:
+   if a row's quote is a sentence that introduces a list (for example, it ends with
+   a colon or refers to "the following"), and the list items are labelled as their
+   own rows, delete the intro row. The obligation is carried by the items.
+   Keep such a row only if the sentence itself states a separate obligation beyond
+   introducing the list, such as a Submission row's deadline and delivery method.
 
 You have a budget of {MAX_TOOL_CALLS} tool calls in total. Plan so that reading every
 page fits in the budget.
