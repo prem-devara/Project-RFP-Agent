@@ -5,6 +5,8 @@ from pathlib import Path
 
 # mcp>=2 renamed FastMCP to MCPServer (same high-level decorator API).
 from mcp.server.mcpserver import MCPServer
+# ToolError messages reach the client; other exceptions are hidden as generic errors.
+from mcp.server.mcpserver.exceptions import ToolError
 from pypdf import PdfReader
 
 RFP_DIR = Path(__file__).resolve().parent / "rfps"
@@ -32,7 +34,7 @@ def _resolve(rfp: str) -> Path:
     if not name.lower().endswith(".pdf"):
         name += ".pdf"
     if name not in files:
-        raise ValueError(
+        raise ToolError(
             f"Unknown RFP '{rfp}'. Available: {', '.join(files) or '(none)'}"
         )
     return files[name]
@@ -75,7 +77,7 @@ def search_rfp(rfp: str, query: str) -> dict:
     """
     words = query.split()
     if not words:
-        raise ValueError("Query must not be empty.")
+        raise ToolError("Query must not be empty.")
     # Whole-word match; words in a phrase may be separated by any whitespace.
     pattern = re.compile(
         r"(?<!\w)" + r"\s+".join(re.escape(w) for w in words) + r"(?!\w)",
@@ -121,7 +123,7 @@ def read_page(rfp: str, page: int) -> dict:
     """Return the full text of one page (1-based, as numbered in the PDF viewer)."""
     name, pages = _get_pages(rfp)
     if not isinstance(page, int) or page < 1 or page > len(pages):
-        raise ValueError(
+        raise ToolError(
             f"Page {page} does not exist in {name} (valid pages: 1–{len(pages)})."
         )
     return {"rfp": name, "page": page, "total_pages": len(pages), "text": pages[page - 1]}

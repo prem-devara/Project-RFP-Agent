@@ -1,2 +1,5 @@
 mcp>=2,<3
 pypdf
+anthropic
+python-dotenv
+openpyxl
