@@ -12,6 +12,7 @@ from pypdf import PdfReader
 RFP_DIR = Path(__file__).resolve().parent / "rfps"
 MAX_MATCHES = 50
 CONTEXT_CHARS = 100  # on each side of a match -> ~200 chars of context
+MAX_PAGES_PER_CALL = 10
 
 mcp = MCPServer("rfp-server")
 
@@ -127,6 +128,39 @@ def read_page(rfp: str, page: int) -> dict:
             f"Page {page} does not exist in {name} (valid pages: 1–{len(pages)})."
         )
     return {"rfp": name, "page": page, "total_pages": len(pages), "text": pages[page - 1]}
+
+
+@mcp.tool()
+def read_pages(rfp: str, start: int, end: int) -> dict:
+    """Return the full text of pages start..end inclusive (1-based), at most 10 pages per call.
+
+    Each page is labelled with its page number. If end is past the last page, the
+    range stops at the last page.
+    """
+    name, pages = _get_pages(rfp)
+    total = len(pages)
+    if not isinstance(start, int) or not isinstance(end, int):
+        raise ToolError("start and end must be integers.")
+    if end < start:
+        raise ToolError(f"end ({end}) must not be before start ({start}).")
+    if end - start + 1 > MAX_PAGES_PER_CALL:
+        raise ToolError(
+            f"Requested {end - start + 1} pages ({start}–{end}); the limit is "
+            f"{MAX_PAGES_PER_CALL} pages per call. Split the range into smaller chunks."
+        )
+    if start < 1 or start > total:
+        raise ToolError(f"Page {start} does not exist in {name} (valid pages: 1–{total}).")
+    last = min(end, total)
+    result = {
+        "rfp": name,
+        "start": start,
+        "end": last,
+        "total_pages": total,
+        "pages": [{"page": n, "text": pages[n - 1]} for n in range(start, last + 1)],
+    }
+    if end > total:
+        result["note"] = f"{name} has {total} pages; returned pages {start}–{last}."
+    return result
 
 
 if __name__ == "__main__":

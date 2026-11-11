@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Font
 # ---------------------------------------------------------------- configuration
 MODEL = "claude-sonnet-5-5"
 EFFORT = "high"  # low | medium | high | xhigh | max
-MAX_TOOL_CALLS = 30
+MAX_TOOL_CALLS = 60
 MAX_TOKENS = 64000
 
 # USD per 1M tokens for MODEL (update together with MODEL).
@@ -52,15 +52,18 @@ INSTRUCTIONS = f"""
 # Your task
 
 You are building a compliance matrix for one RFP. Apply the rulebook above exactly.
-You can read the RFP only through the tools list_rfps, search_rfp and read_page.
+You can read the RFP only through the tools list_rfps, search_rfp, read_pages and
+read_page.
 
 How to work:
 1. Use list_rfps to get the page count.
 2. Search with several terms: "shall", "must", "required", "will", "submit", "evaluat".
    Note that search_rfp matches whole words, so "evaluat" may find nothing; also try
    "evaluation" and "evaluated".
-3. Read EVERY page with read_page, not only pages with search hits. Obligations often
-   appear without signal words (lists, tables, headings).
+3. Read EVERY page, not only pages with search hits. Obligations often appear without
+   signal words (lists, tables, headings). Read the document with read_pages in
+   consecutive chunks of up to 10 pages (1-10, 11-20, ...) until the last page. Use
+   read_page only to re-read a single page.
 4. Label requirements, submission instructions, evaluation criteria and Info items,
    one obligation per row, as the rulebook says (including the Submission exception).
 5. Before giving your final answer, review your rows against the list-intro rule:
@@ -76,9 +79,9 @@ page fits in the budget.
 For each item return an object with exactly these keys:
 - "requirement": short description in your own words
 - "section": the PDF heading the item falls under, as written
-- "page": PDF page number (integer, as used by read_page)
+- "page": PDF page number (integer, as labelled by read_pages / read_page)
 - "type": one of {", ".join(TYPES)}
-- "quote": exact text copied from read_page output for that page, never retyped or
+- "quote": exact text copied from that page's text in read_pages / read_page output, never retyped or
   paraphrased; it must appear verbatim on the cited page
 
 Final answer: output ONLY a JSON array of these objects. No prose, no code fences.
