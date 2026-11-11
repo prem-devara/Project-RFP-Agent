@@ -15,6 +15,7 @@ Label three kinds of items:
 Do not label:
 - "Should" and "may" statements unless the RFP treats them as mandatory.
 - Background or description (e.g. "The City currently uses Office 365").
+Exception: items listed in a scope of services count as requirements (usually Technical), even when introduced with "may include".
 
 ## 2. One obligation per row
 
@@ -25,9 +26,9 @@ Do not label:
   Example: NGFW firewall + PCI-DSS isolation + MGDPA segregation = three rows.
 - Several rows may share the same quote when they come from one sentence.
 - A requirement repeated elsewhere in the RFP: label it once, at its first appearance.
+- A sentence that introduces a list is not its own row; label only the list items.
+Exception: a submission instruction stays as one row, including its deadline, delivery methods and address. A rule about what happens to late or non-compliant submissions is a separate row.
 
-**Exception:** a submission instruction stays as **one row**, including its deadline,
-delivery methods and address.
 
 ## 3. Types
 
