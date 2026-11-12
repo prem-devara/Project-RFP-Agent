@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFP Analysis Agent — Prem Devara</title>
+<meta name="description" content="Project summary of Prem Devara's RFP Analysis Agent: an AI agent that builds RFP compliance checklists, tested against hand-built answer keys for three public RFPs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#F7F7F5; --surface:#FFFFFF; --ink:#16181D; --body:#3A3F48; --muted:#4A4F59; --line:#DEDFDB; --accent:#1F5FBF; --accent-hover:#174A96; --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif; --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans); line-height:1.7; }
+  a { color:var(--accent); } a:hover { color:var(--accent-hover); }
+  header { background:var(--surface); border-bottom:1px solid var(--line); }
+  .bar { max-width:760px; margin:0 auto; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+  .brand { font-weight:700; font-size:18px; color:var(--ink); text-decoration:none; }
+  .back { font-size:15px; font-weight:500; text-decoration:none; padding:12px 0; }
+  main { max-width:760px; margin:0 auto; padding:56px 24px 80px; }
+  .eyebrow { margin:0 0 12px; font-family:var(--mono); font-size:13px; color:var(--accent); letter-spacing:0.04em; }
+  h1 { margin:0; font-size:clamp(28px,4.5vw,40px); line-height:1.2; }
+  .meta { margin:16px 0 0; padding:16px 20px; background:var(--surface); border:1px solid var(--line); border-radius:8px; font-size:15px; color:var(--body); }
+  .meta p { margin:0; } .meta p + p { margin-top:6px; }
+  article { margin-top:40px; font-size:17px; color:var(--body); }
+  article p { margin:0 0 20px; }
+  footer { border-top:1px solid var(--line); }
+  .foot { max-width:760px; margin:0 auto; padding:24px; font-size:14px; color:var(--muted); }
+  article h2 { margin:36px 0 10px; font-size:20px; color:var(--accent); }
+  article ul { margin:0 0 20px; padding-left:22px; } article li { margin-bottom:6px; }
+  .tbl { width:100%; border-collapse:collapse; margin:0 0 20px; font-size:15px; background:var(--surface); border:1px solid var(--line); }
+  .tbl th, .tbl td { padding:10px 10px; text-align:left; border-bottom:1px solid var(--line); }
+  .tbl th { color:var(--ink); font-weight:600; }
+  .tbl td.n, .tbl th.n { text-align:right; font-family:var(--mono); font-size:15px; }
+  .tbl tr:last-child td { border-bottom:none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <a class="brand" href="index.html">Prem Devara</a>
+    <a class="back" href="index.html#projects">← All projects</a>
+  </div>
+</header>
+<main>
+  <p class="eyebrow">PROJECT · AI AGENT · 2026</p>
+  <h1>RFP Analysis Agent</h1>
+  <div class="meta"><p>An AI agent that builds RFP compliance checklists, tested against hand-built answer keys for three public RFPs.</p></div>
+  <article>
+    <h2>Problem</h2>
+    <p>An RFP can run past 100 pages, with requirements scattered throughout the document. Bid teams build a compliance checklist by hand, and a single missed item can get a proposal rejected.</p>
+
+    <h2>The build</h2>
+    <p>An agent that reads the RFP and lists every requirement with its category, the page it's on and the exact wording, so each item can be checked against the source. It reads the RFP through a document server that returns the text page by page, so every requirement is tied to the page it came from. The server is built on MCP, so the same RFPs can also be used for Q&amp;A in the Claude desktop app. While writing the proposal, the bid team can ask "What are the insurance limits?" and get an answer with the page it came from.</p>
+    <p>Code checks the agent's work:</p>
+    <ul>
+      <li><strong>Quotes:</strong> any quote not found on the page it cites is flagged for review.</li>
+      <li><strong>Page coverage:</strong> when the agent says it's done, the code compares the pages it read with the total page count. If any were skipped, it tells the agent which pages are missing and sends it back to read and label them.</li>
+    </ul>
+
+    <h2>Evals</h2>
+    <p>I built the answer keys by hand for four public RFPs. I read each RFP and recorded every requirement in a spreadsheet: what it requires, its section, page, category and exact quote. I followed a written rulebook, for example one requirement per row. For the long RFPs, I labelled selected sections completely. In total, the keys hold about 410 requirements.</p>
+    <p>One RFP was used to build the agent. The other three were held back for testing, and their answer keys were saved before the agent ever ran on them. A judge AI model compared the agent's checklist with each key, and each test RFP was run three times.</p>
+
+    <h2>Results</h2>
+    <table class="tbl">
+      <thead><tr><th>RFP</th><th class="n">Pages</th><th class="n">Recall</th><th class="n">Precision</th></tr></thead>
+      <tbody>
+        <tr><td>Ann Arbor</td><td class="n">35</td><td class="n">95%</td><td class="n">90%</td></tr>
+        <tr><td>Kingsport</td><td class="n">37</td><td class="n">94%</td><td class="n">94%</td></tr>
+        <tr><td>New York OIG</td><td class="n">112</td><td class="n">84%</td><td class="n">95%</td></tr>
+      </tbody>
+    </table>
+    <p>The agent's main weaknesses are cover-page facts and confusing the review process with the scoring criteria. The first version also skipped 55 pages of a 112-page RFP. A page-coverage check fixed that.</p>
+
+    <h2>What I learned</h2>
+    <ul>
+      <li><strong>Instructions alone don't guarantee behaviour:</strong> the agent was told to read every page and still skipped half of a 112-page RFP. Only a check in code fixed it.</li>
+      <li><strong>The answer keys decide how much the results can be trusted:</strong> building them was the hardest part of the project.</li>
+      <li><strong>Results vary between runs:</strong> running the agent on the same RFP twice gave precision scores up to 7 points apart. That's why I ran each test three times and reported the average.</li>
+    </ul>
+
+    <p style="margin-top:36px"><a href="https://github.com/prem-devara/Project-RFP-Agent/blob/main/README.md">View the code and full README on GitHub →</a></p>
+  </article>
+</main>
+<footer><div class="foot">© 2026 Prem Devara · <a href="index.html">premdevara.com</a></div></footer>
+<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "564817594b814c2e9127c5244a1b13a3"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
