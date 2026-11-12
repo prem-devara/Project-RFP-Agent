@@ -21,7 +21,7 @@ from openpyxl.styles import Alignment, Font
 MODEL = "claude-sonnet-5-5"
 EFFORT = "high"  # low | medium | high | xhigh | max
 MAX_TOOL_CALLS = 60
-MAX_TOKENS = 64000
+MAX_TOKENS = 128000
 
 # USD per 1M tokens for MODEL (update together with MODEL).
 PRICE_INPUT = 2.00
@@ -367,7 +367,21 @@ async def main(rfp: str) -> None:
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         sys.exit("Usage: venv/bin/python rfp_agent.py <rfp name, e.g. elysian>")
+    def _find_agent_error(exc: BaseException) -> AgentError | None:
+        """AgentErrors raised inside the MCP client's task groups arrive wrapped in ExceptionGroups."""
+        if isinstance(exc, AgentError):
+            return exc
+        if isinstance(exc, BaseExceptionGroup):
+            for inner in exc.exceptions:
+                found = _find_agent_error(inner)
+                if found is not None:
+                    return found
+        return None
+
     try:
         asyncio.run(main(sys.argv[1]))
-    except AgentError as exc:
-        sys.exit(f"ERROR: {exc}")
+    except (AgentError, BaseExceptionGroup) as exc:
+        err = _find_agent_error(exc)
+        if err is None:
+            raise
+        sys.exit(f"ERROR: {err}")
