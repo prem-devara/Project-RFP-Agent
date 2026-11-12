@@ -22,6 +22,7 @@ MODEL = "claude-sonnet-5-5"
 EFFORT = "high"  # low | medium | high | xhigh | max
 MAX_TOOL_CALLS = 60
 MAX_TOKENS = 128000
+MAX_COVERAGE_REMINDERS = 3  # times the agent is sent back to read unread pages
 
 # USD per 1M tokens for MODEL (update together with MODEL).
 PRICE_INPUT = 2.00
@@ -206,8 +207,26 @@ async def check_model(client: anthropic.AsyncAnthropic) -> None:
         raise AgentError("API key rejected. Check ANTHROPIC_API_KEY in .env.")
 
 
-async def run_loop(client, session, tools, rfp_file: str, usage: Counter) -> tuple[str, int]:
-    """Run the tool-use loop. Returns (final text, tool calls used)."""
+def page_ranges(pages: list[int]) -> str:
+    """[1, 2, 3, 7, 9, 10] -> '1–3, 7, 9–10'."""
+    out, start = [], None
+    for i, p in enumerate(pages):
+        if start is None:
+            start = p
+        if i == len(pages) - 1 or pages[i + 1] != p + 1:
+            out.append(str(start) if start == p else f"{start}–{p}")
+            start = None
+    return ", ".join(out)
+
+
+async def run_loop(client, session, tools, rfp_file: str, total_pages: int,
+                   usage: Counter) -> tuple[str, int]:
+    """Run the tool-use loop. Returns (final text, tool calls used).
+
+    Coverage check: before the final answer is accepted, every page must have been read
+    via read_page/read_pages. Otherwise the agent is told which pages are unread and must
+    read and label them; their items are merged with the earlier ones in code.
+    """
     messages = [{
         "role": "user",
         "content": f"Build the compliance matrix for the RFP '{rfp_file}'.",
@@ -215,6 +234,9 @@ async def run_loop(client, session, tools, rfp_file: str, usage: Counter) -> tup
     system = build_system_prompt()
     calls = 0
     limit_hit = False
+    pages_read: set[int] = set()
+    collected: list[dict] = []
+    reminders = 0
 
     while True:
         async with client.messages.stream(
@@ -248,7 +270,34 @@ async def run_loop(client, session, tools, rfp_file: str, usage: Counter) -> tup
         text = "".join(b.text for b in response.content if b.type == "text")
 
         if response.stop_reason != "tool_use" or not tool_uses:
-            return text, calls
+            missing = sorted(set(range(1, total_pages + 1)) - pages_read)
+            if not missing and reminders == 0:
+                return text, calls
+            try:
+                batch = parse_items(text)
+            except (ValueError, json.JSONDecodeError) as exc:
+                raw = save_raw(Path(rfp_file).stem, text)
+                raise AgentError(f"Answer was not valid JSON ({exc}). Raw text saved to {raw}.")
+            collected.extend(item for item in batch if item not in collected)
+            if not missing:
+                return json.dumps(collected, ensure_ascii=False), calls
+            if limit_hit:
+                raise AgentError(f"Tool limit of {MAX_TOOL_CALLS} reached with pages still unread: "
+                                 f"{page_ranges(missing)}.")
+            if reminders >= MAX_COVERAGE_REMINDERS:
+                raise AgentError(f"Pages still unread after {reminders} coverage reminders: "
+                                 f"{page_ranges(missing)}.")
+            reminders += 1
+            print(f"  Coverage check: pages not read: {page_ranges(missing)}. "
+                  "Asking the agent to read and label them.")
+            messages.append({"role": "user", "content": (
+                f"Coverage check: you have not read pages {page_ranges(missing)} of {rfp_file}. "
+                "Every page must be read. Read all of these pages now with read_pages (up to 10 "
+                "pages per call) and label every item on them, following the rulebook. Then output "
+                "ONLY a JSON array of the NEW items from these pages. Do not repeat items you have "
+                "already returned; they are kept. If these pages contain no items, output []."
+            )})
+            continue
 
         if limit_hit:
             # Already told to finish; still calling tools. Stop cleanly.
@@ -270,6 +319,10 @@ async def run_loop(client, session, tools, rfp_file: str, usage: Counter) -> tup
             print(f"  [{calls:>2}/{MAX_TOOL_CALLS}] {block.name}({json.dumps(block.input)})")
             try:
                 res = await session.call_tool(block.name, block.input)
+                if not res.is_error and block.name == "read_page":
+                    pages_read.add(int(result_data(res)["page"]))
+                elif not res.is_error and block.name == "read_pages":
+                    pages_read.update(int(p["page"]) for p in result_data(res)["pages"])
                 results.append({
                     "type": "tool_result", "tool_use_id": block.id,
                     "content": result_text(res) or "(empty)", "is_error": bool(res.is_error),
@@ -334,7 +387,8 @@ async def main(rfp: str) -> None:
             await session.initialize()
 
             # Resolve the RFP name up front (not counted against the model's budget).
-            available = [r["file"] for r in result_data(await session.call_tool("list_rfps", {}))]
+            available = {r["file"]: r["pages"]
+                         for r in result_data(await session.call_tool("list_rfps", {}))}
             wanted = rfp if rfp.lower().endswith(".pdf") else f"{rfp}.pdf"
             if wanted not in available:
                 raise AgentError(f"Unknown RFP '{rfp}'. Available: {', '.join(available)}")
@@ -348,7 +402,7 @@ async def main(rfp: str) -> None:
             print(f"Model {MODEL} OK. Analysing {wanted} with tools: "
                   f"{', '.join(t['name'] for t in tools)}")
             usage: Counter = Counter()
-            text, calls = await run_loop(client, session, tools, wanted, usage)
+            text, calls = await run_loop(client, session, tools, wanted, available[wanted], usage)
 
             try:
                 items = parse_items(text)
