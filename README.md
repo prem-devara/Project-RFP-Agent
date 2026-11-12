@@ -1,4 +1,4 @@
-# RFP Analysis Agent
+# RFP Analysis Agent with MCP Server
 
 A Request for Proposals (RFP) can run past 100 pages, and the requirements are scattered throughout it. Bid teams go through it line by line and build a checklist of everything the proposal has to meet. Missing one item can get a proposal rejected.
 
