@@ -470,3 +470,9 @@ if __name__ == "__main__":
         main(sys.argv[1])
     except ScoreError as exc:
         sys.exit(f"ERROR: {exc}")
+    except anthropic.AuthenticationError:
+        sys.exit("ERROR: Judge API call failed: API key rejected. Check ANTHROPIC_API_KEY in .env.")
+    except anthropic.APIStatusError as exc:
+        sys.exit(f"ERROR: Judge API call failed (HTTP {exc.status_code}): {exc.message}")
+    except anthropic.APIConnectionError as exc:
+        sys.exit(f"ERROR: Judge API call failed: could not reach the API ({exc}).")
