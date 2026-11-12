@@ -27,6 +27,15 @@ PRICE_OUTPUT = 10.00
 PRICE_CACHE_WRITE = 2.50
 PRICE_CACHE_READ = 0.20
 
+# Partly labelled RFPs: only these pages were labelled in the answer key.
+# Agent items on other pages are dropped before matching (not counted in precision).
+# RFPs not listed here are scored on all pages. Ranges are inclusive (start, end).
+SCORED_PAGES: dict[str, list[tuple[int, int]]] = {
+    "annarbor": [(3, 16)],
+    "kingsport": [(1, 26), (35, 35)],
+    "nyoig": [(1, 1), (2, 2), (7, 7), (9, 9), (25, 25), (27, 27), (35, 35), (43, 43), (44, 44)],
+}
+
 ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = ROOT / "outputs"
 LABELS_DIR = ROOT / "labels"
@@ -119,6 +128,31 @@ def load_key(path: Path) -> list[dict]:
     if not key:
         raise ScoreError("Answer key has no rows.")
     return key
+
+
+def scored_pages(stem: str) -> set[int] | None:
+    """Set of scored pages for an RFP, or None if all pages are scored."""
+    ranges = SCORED_PAGES.get(stem)
+    if ranges is None:
+        return None
+    return {p for start, end in ranges for p in range(start, end + 1)}
+
+
+def describe_pages(stem: str) -> str:
+    ranges = SCORED_PAGES.get(stem)
+    if ranges is None:
+        return "all pages"
+    return ", ".join(str(s) if s == e else f"{s}–{e}" for s, e in ranges)
+
+
+def filter_pages(agent: list[dict], pages: set[int] | None) -> tuple[list[dict], list[dict]]:
+    """Split agent items into (kept, dropped) by page. Unparseable pages are dropped."""
+    if pages is None:
+        return agent, []
+    kept, dropped = [], []
+    for a in agent:
+        (kept if _page(a["page"]) in pages else dropped).append(a)
+    return kept, dropped
 
 
 # ---------------------------------------------------------------- judge
@@ -295,9 +329,16 @@ def cost(usage: dict) -> float:
 
 
 # ---------------------------------------------------------------- output
-def summary_rows(result: dict, usage: dict) -> list[list]:
+def summary_rows(result: dict, usage: dict, pages: dict) -> list[list]:
     o, i, g = result["overall"], result["info"], result["agreement"]
     rows = [
+        ["Scored pages", pages["description"]],
+        ["Agent items total", pages["total"]],
+        ["Dropped (outside scored pages)", pages["dropped"]],
+        ["Agent items scored", pages["total"] - pages["dropped"]],
+        [],
+    ]
+    rows += [
         ["Overall (Info excluded)", "Key rows", "Matched", "Recall", "Agent items", "Matched", "Precision"],
         ["All types", o["scored_key_rows"], o["key_matched"], o["recall"],
          o["agent_items_scored"], o["agent_matched"], o["precision"]],
@@ -325,8 +366,20 @@ def summary_rows(result: dict, usage: dict) -> list[list]:
     return rows
 
 
-def write_xlsx(path: Path, result: dict, usage: dict) -> None:
+SECTION_HEADERS = {"Overall (Info excluded)", "Info (not scored)", "Matched pairs"}
+
+
+def write_xlsx(path: Path, result: dict, usage: dict, pages: dict) -> None:
     wb = Workbook()
+
+    summary = wb.create_sheet("summary")
+    for r in summary_rows(result, usage, pages):
+        summary.append(r)
+        if r and r[0] in SECTION_HEADERS:
+            for c in summary[summary.max_row]:
+                c.font = Font(bold=True)
+    for idx, w in enumerate([32, 12, 10, 10, 12, 10, 10], start=1):
+        summary.column_dimensions[summary.cell(row=1, column=idx).column_letter].width = w
 
     def sheet(title, header, rows, widths):
         ws = wb.create_sheet(title)
@@ -342,8 +395,6 @@ def write_xlsx(path: Path, result: dict, usage: dict) -> None:
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
         ws.freeze_panes = "A2"
 
-    s = summary_rows(result, usage)
-    sheet("summary", s[0], s[1:], [30, 12, 10, 10, 12, 10, 10])
     sheet("matches",
           ["key id", "key requirement", "agent id", "agent requirement", "page agree", "type agree", "judge reason"],
           [[p["key_id"], p["key_requirement"], p["agent_id"], p["agent_requirement"],
@@ -359,16 +410,16 @@ def write_xlsx(path: Path, result: dict, usage: dict) -> None:
     wb.save(path)
 
 
-def print_report(result: dict, usage: dict) -> None:
+def print_report(result: dict, usage: dict, pages: dict) -> None:
     print("=" * 72 + "\nSUMMARY\n" + "=" * 72)
-    rows = summary_rows(result, usage)
+    rows = summary_rows(result, usage, pages)
     for r in rows:
         if not r:
             print()
         elif len(r) == 7:
-            print(f"{r[0]:<26}{r[1]!s:>9}{r[2]!s:>9}{r[3]!s:>9}{r[4]!s:>13}{r[5]!s:>9}{r[6]!s:>11}")
+            print(f"{r[0]:<32}{r[1]!s:>9}{r[2]!s:>9}{r[3]!s:>9}{r[4]!s:>13}{r[5]!s:>9}{r[6]!s:>11}")
         else:
-            print("  ".join(f"{str(v):<26}" if n == 0 else str(v) for n, v in enumerate(r)))
+            print("  ".join(f"{str(v):<32}" if n == 0 else str(v) for n, v in enumerate(r)))
 
     print("\n" + "=" * 72 + f"\nMISSED ({len(result['missed'])}) - key rows no agent item matched\n" + "=" * 72)
     for k in result["missed"]:
@@ -383,19 +434,32 @@ def print_report(result: dict, usage: dict) -> None:
 def main(rfp: str) -> None:
     load_dotenv(ROOT / ".env")
     stem = Path(rfp).stem
-    agent = load_agent(OUTPUT_DIR / f"{stem}_matrix.json")
+    all_agent = load_agent(OUTPUT_DIR / f"{stem}_matrix.json")  # AG ids follow full matrix order
     key = load_key(LABELS_DIR / f"{stem}_labels.xlsx")
-    print(f"Agent items: {len(agent)}  |  Answer key rows: {len(key)}  |  Judge: {JUDGE_MODEL}\n")
 
-    matches, usage = judge(agent, key)
+    allowed = scored_pages(stem)
+    agent, dropped = filter_pages(all_agent, allowed)
+    pages = {"description": describe_pages(stem), "total": len(all_agent), "dropped": len(dropped)}
+    print(f"Agent items: {len(all_agent)} ({len(dropped)} dropped outside scored pages: "
+          f"{pages['description']})  |  Answer key rows: {len(key)}  |  Judge: {JUDGE_MODEL}")
+    if allowed is not None:
+        outside = [k["id"] for k in key if _page(k["page"]) not in allowed]
+        if outside:
+            print(f"WARNING: answer-key rows outside SCORED_PAGES (kept): {outside}")
+    print()
+
+    if agent:
+        matches, usage = judge(agent, key)
+    else:
+        matches, usage = [], {"input": 0, "output": 0, "cache_write": 0, "cache_read": 0}
     (OUTPUT_DIR / f"{stem}_matches.json").write_text(
         json.dumps(matches, indent=2, ensure_ascii=False), encoding="utf-8")
     by_agent = validate_matches(matches, agent, key)
 
     result = score(agent, key, by_agent)
     xlsx = OUTPUT_DIR / f"{stem}_score.xlsx"
-    write_xlsx(xlsx, result, usage)
-    print_report(result, usage)
+    write_xlsx(xlsx, result, usage, pages)
+    print_report(result, usage, pages)
     print(f"\nSaved: outputs/{stem}_matches.json, {xlsx.relative_to(ROOT)}")
 
 
