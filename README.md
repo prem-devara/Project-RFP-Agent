@@ -14,6 +14,8 @@ The bid team then reviews the list instead of starting from a blank page.
 - **Agent:** reads the RFP through the server, decides what counts as a requirement, assigns a category and writes the checklist (`rfp_agent.py`).
 - **Code:** checks the agent's work. It flags any quote not found on its page and any invalid category, and it won't accept the checklist until every page has been read.
 
+![AI workflow](docs/ai-workflow.svg)
+
 The agent follows a rulebook (`RULEBOOK.md`) that defines what counts as a requirement and how to categorise it. I used the same rulebook to build the answer keys.
 
 The checklist is saved in two files:
@@ -30,6 +32,8 @@ I wanted to know how many of each RFP's requirements the agent finds, and how of
 4. Labelling every page of the long RFPs by hand wasn't practical, so I labelled selected sections completely and scored only those. I chose sections that cover a range of categories.
 5. A judge AI model compared the agent's checklist with my answer key, item by item.
 6. I ran the RFP agent three times on each test RFP and averaged the results.
+
+![Labelling process](docs/labelling-process.svg)
 
 ## Results
 
