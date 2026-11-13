@@ -24,7 +24,7 @@ The checklist is saved in two files:
 
 I wanted to know how many of each RFP's requirements the agent finds, and how often it lists things that aren't requirements.
 
-1. I selected four public RFPs and built the checklist for each by hand, following the rulebook. These are the answer keys.
+1. I selected four public RFPs and built the checklist for each by hand, following the rulebook, and checked every quote against the PDF. These are the answer keys.
 2. I used one short RFP (Elysian, 3 pages) to build the agent. I kept the other three (Ann Arbor, Kingsport and New York OIG) to test run the RFP agent.
 3. I saved the answer keys to the repository before running the agent on the test RFPs. That way the keys couldn't be adjusted after seeing the results.
 4. Labelling every page of the long RFPs by hand wasn't practical, so I labelled selected sections completely and scored only those. I chose sections that cover a range of categories.
